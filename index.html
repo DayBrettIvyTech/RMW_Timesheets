@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hours Tracker</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f1114;
+  --surface: #181b20;
+  --surface2: #1f2329;
+  --border: #2a2f37;
+  --text: #e4e4e7;
+  --text-muted: #8b8d94;
+  --accent: #3b82f6;
+  --accent-dim: #1e3a5f;
+  --green: #22c55e;
+  --green-dim: #14532d;
+  --red: #ef4444;
+  --red-dim: #7f1d1d;
+  --yellow: #eab308;
+  --yellow-dim: #713f12;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+header {
+  margin-bottom: 2.5rem;
+}
+
+header h1 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+header p {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+/* Stats Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.stat-card .label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card .value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-card .sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.stat-on-target .value { color: var(--green); }
+.stat-below .value { color: var(--red); }
+.stat-close .value { color: var(--yellow); }
+.stat-neutral .value { color: var(--text); }
+
+/* Average bar */
+.avg-bar-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+}
+
+.avg-bar-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.75rem;
+}
+
+.avg-bar-track {
+  position: relative;
+  height: 28px;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.avg-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease, background 0.3s ease;
+  min-width: 2px;
+}
+
+.avg-bar-target {
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  width: 2px;
+  background: var(--text);
+  border-radius: 1px;
+  z-index: 2;
+}
+
+.avg-bar-target-label {
+  position: absolute;
+  top: -22px;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Sections */
+.section {
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Upload area */
+.upload-area {
+  border: 2px dashed var(--border);
+  border-radius: 8px;
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--surface);
+}
+
+.upload-area:hover, .upload-area.dragover {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.upload-area p {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.upload-area p strong {
+  color: var(--accent);
+}
+
+.upload-area input { display: none; }
+
+/* Manual entry */
+.manual-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 140px auto;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .manual-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 0.35rem;
+}
+
+.form-group input, .form-group select {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.875rem;
+}
+
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.btn {
+  padding: 0.6rem 1.25rem;
+  border: none;
+  border-radius: 6px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover { opacity: 0.85; }
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--red-dim);
+  color: var(--red);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.6rem;
+}
+
+.btn-small {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.75rem;
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+thead th {
+  background: var(--surface);
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+tbody td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.825rem;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+
+tbody tr:hover { background: var(--surface); }
+
+td.hours-cell {
+  font-weight: 600;
+}
+
+td.on-target { color: var(--green); }
+td.below { color: var(--red); }
+td.close { color: var(--yellow); }
+
+.running-avg-cell {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.source-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+}
+
+.source-badge.file {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.source-badge.manual {
+  background: var(--surface2);
+  color: var(--text-muted);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  z-index: 100;
+  animation: fadeIn 0.2s ease;
+}
+
+.toast.success { border-color: var(--green); color: var(--green); }
+.toast.error { border-color: var(--red); color: var(--red); }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Chart */
+.chart-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 140px;
+  padding-top: 1.5rem;
+  position: relative;
+  min-width: fit-content;
+}
+
+.chart-bar-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 22px;
+  max-width: 48px;
+}
+
+.chart-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.4s ease;
+  min-height: 2px;
+  position: relative;
+}
+
+.chart-bar-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.55rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  max-height: 50px;
+  overflow: hidden;
+}
+
+.chart-target-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  border-top: 1.5px dashed var(--text-muted);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.chart-target-label {
+  position: absolute;
+  right: 0;
+  transform: translateY(-100%);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  padding: 0 4px;
+  background: var(--surface);
+}
+
+/* Actions bar */
+.actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.target-setting {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.target-setting input {
+  width: 60px;
+  padding: 0.3rem 0.5rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.target-setting input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-muted);
+}
+
+.empty-state p { margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>hours tracker</h1>
+    <p>Running weekly average for Rea Magnet Wire — target: <span id="targetDisplay">30</span> hrs/wk</p>
+  </header>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card stat-neutral">
+      <div class="label">Running Average</div>
+      <div class="value" id="statAvg">—</div>
+      <div class="sub">hrs/week</div>
+    </div>
+    <div class="stat-card stat-neutral">
+      <div class="label">Total Hours</div>
+      <div class="value" id="statTotal">—</div>
+      <div class="sub" id="statWeekCount">0 weeks tracked</div>
+    </div>
+    <div class="stat-card stat-neutral">
+      <div class="label">Deficit / Surplus</div>
+      <div class="value" id="statDelta">—</div>
+      <div class="sub">vs target</div>
+    </div>
+    <div class="stat-card stat-neutral">
+      <div class="label">This Period Needs</div>
+      <div class="value" id="statNeeded">—</div>
+      <div class="sub">to stay on target</div>
+    </div>
+  </div>
+
+  <!-- Average bar -->
+  <div class="avg-bar-container">
+    <div class="avg-bar-label">Average vs Target</div>
+    <div class="avg-bar-track">
+      <div class="avg-bar-fill" id="avgBarFill" style="width: 0%; background: var(--accent);"></div>
+      <div class="avg-bar-target" id="avgBarTarget" style="left: 75%;">
+        <div class="avg-bar-target-label">30 hr</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div class="section">
+    <div class="section-title">Weekly Hours</div>
+    <div class="chart-container" id="chartContainer">
+      <div class="empty-state"><p>No data yet</p></div>
+    </div>
+  </div>
+
+  <!-- Upload -->
+  <div class="section">
+    <div class="section-title">Import Timesheets</div>
+    <div class="upload-area" id="uploadArea">
+      <p><strong>Drop .xls/.xlsx files here</strong> or click to browse</p>
+      <p style="font-size: 0.75rem; margin-top: 0.5rem;">Rea Magnet Wire timecard format — multiple files OK</p>
+      <input type="file" id="fileInput" accept=".xls,.xlsx" multiple>
+    </div>
+  </div>
+
+  <!-- Manual entry -->
+  <div class="section">
+    <div class="section-title">Manual Entry</div>
+    <div class="manual-form" id="manualForm">
+      <div class="form-group">
+        <label>Week Starting</label>
+        <input type="date" id="manualDate">
+      </div>
+      <div class="form-group">
+        <label>Hours</label>
+        <input type="number" id="manualHours" step="0.5" min="0" max="80" placeholder="30.0">
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <button class="btn btn-primary" onclick="addManualEntry()">Add Week</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="section">
+    <div class="actions-bar">
+      <div class="target-setting">
+        <span>Target:</span>
+        <input type="number" id="targetInput" value="30" step="0.5" min="0" max="60" onchange="updateTarget()">
+        <span>hrs/wk</span>
+      </div>
+      <div>
+        <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
+        <button class="btn btn-small btn-primary" onclick="exportCSV()" style="margin-left: 0.5rem;">Export CSV</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="section">
+    <div class="section-title">All Weeks</div>
+    <div id="tableContainer">
+      <div class="empty-state"><p>Upload timesheets or add entries manually.</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──
+let weeks = JSON.parse(localStorage.getItem('rea_hours_weeks') || '[]');
+let target = parseFloat(localStorage.getItem('rea_hours_target') || '30');
+
+document.getElementById('targetInput').value = target;
+
+// ── Timesheet Parsing ──
+function parseTimeValue(val) {
+  if (val === null || val === undefined || val === '') return 0;
+
+  // SheetJS raw mode: Excel time as fraction of day (0.333... = 8 hours)
+  if (typeof val === 'number') {
+    return val * 24;
+  }
+
+  // Fallback: string like "08:00:00"
+  if (typeof val === 'string') {
+    const match = val.match(/^(\d+):(\d+)(?::(\d+))?$/);
+    if (match) {
+      return parseInt(match[1]) + parseInt(match[2]) / 60;
+    }
+  }
+
+  return 0;
+}
+
+function excelSerialToDate(serial) {
+  // Excel serial date: days since Jan 1, 1900 (with leap year bug)
+  // 45788 = May 11, 2025
+  const epoch = new Date(1899, 11, 30); // Dec 30, 1899
+  return new Date(epoch.getTime() + serial * 86400000);
+}
+
+function parseDateFromFilename(filename) {
+  const match = filename.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})_to_(\d{1,2})-(\d{1,2})-(\d{2,4})/);
+  if (!match) return null;
+
+  let [, m1, d1, y1, m2, d2, y2] = match;
+  y1 = y1.length === 2 ? (parseInt(y1) > 50 ? '19' + y1 : '20' + y1) : y1;
+  y2 = y2.length === 2 ? (parseInt(y2) > 50 ? '19' + y2 : '20' + y2) : y2;
+
+  return {
+    start: new Date(parseInt(y1), parseInt(m1) - 1, parseInt(d1)),
+    end: new Date(parseInt(y2), parseInt(m2) - 1, parseInt(d2))
+  };
+}
+
+function getWeekStartFromDate(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  d.setDate(d.getDate() - day);
+  return d;
+}
+
+function formatDate(d) {
+  const date = new Date(d);
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function dateKey(d) {
+  const date = new Date(d);
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+function parseTimesheetFile(data, filename) {
+  const workbook = XLSX.read(data, { type: 'array', cellDates: false, raw: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+
+  const results = [];
+  let currentWeekStart = null;
+  let dailyHours = [];
+  let inWeek = false;
+
+  // Extract year from sheet (row with "Year" label)
+  let sheetYear = new Date().getFullYear();
+  for (let i = 0; i < Math.min(json.length, 15); i++) {
+    const row = json[i] || [];
+    for (let j = 0; j < row.length - 1; j++) {
+      if (String(row[j] || '').trim().toLowerCase() === 'year' && row[j+1]) {
+        sheetYear = parseInt(row[j+1]);
+        break;
+      }
+    }
+  }
+
+  const filenameDates = parseDateFromFilename(filename);
+
+  for (let i = 0; i < json.length; i++) {
+    const row = json[i];
+    if (!row || row.length === 0) continue;
+
+    const firstCell = String(row[0] || '').trim();
+
+    // Detect "Week 1" or "Week 2" header row
+    if (/^Week\s*\d/i.test(firstCell)) {
+      // Save previous week if we have one
+      if (inWeek && dailyHours.length > 0) {
+        const totalHours = dailyHours.reduce((a, b) => a + b, 0);
+        results.push({ weekStart: currentWeekStart, hours: Math.round(totalHours * 100) / 100 });
+      }
+
+      inWeek = true;
+      dailyHours = [];
+      currentWeekStart = null;
+
+      // Next row has the date reference (e.g. "w/o 5/4" or Excel serial number)
+      const nextRow = json[i + 1];
+      if (nextRow) {
+        const dateCell = nextRow[0];
+
+        // Excel serial date number (e.g., 45788 = May 11, 2025)
+        if (typeof dateCell === 'number' && dateCell > 40000) {
+          const d = excelSerialToDate(dateCell);
+          currentWeekStart = getWeekStartFromDate(d);
+        }
+        // String like "w/o 5/4" or "w/o 12/28"
+        else if (typeof dateCell === 'string') {
+          const woMatch = dateCell.match(/w\/o\s*(\d{1,2})\/(\d{1,2})/i);
+          if (woMatch) {
+            const m = parseInt(woMatch[1]);
+            const d = parseInt(woMatch[2]);
+            // Use sheet year; "w/o" = week of, treat that date as a day in the week
+            const ref = new Date(sheetYear, m - 1, d);
+            currentWeekStart = getWeekStartFromDate(ref);
+          }
+        }
+      }
+
+      // Fallback to filename dates
+      if (!currentWeekStart && filenameDates) {
+        const weekNum = parseInt(firstCell.match(/\d+/)[0]);
+        const start = new Date(filenameDates.start);
+        if (weekNum === 2) start.setDate(start.getDate() + 7);
+        currentWeekStart = getWeekStartFromDate(start);
+      }
+
+      continue;
+    }
+
+    // Detect day rows
+    const dayNames = ['sun', 'mon', 'tues', 'tue', 'wed', 'thurs', 'thu', 'fri', 'sat'];
+    if (inWeek && dayNames.includes(firstCell.toLowerCase())) {
+      // Column 7 = Daily Total
+      const dailyTotal = row[7];
+      let hours = 0;
+
+      if (dailyTotal !== null && dailyTotal !== undefined) {
+        hours = parseTimeValue(dailyTotal);
+      }
+
+      // Fallback: AM+PM total columns (5 and 6)
+      if (hours === 0 && row[5] && row[6]) {
+        hours = parseTimeValue(row[5]) + parseTimeValue(row[6]);
+      }
+
+      // Fallback: compute from clock-in/out
+      if (hours === 0) {
+        const amIn = parseTimeValue(row[1]);
+        const amOut = parseTimeValue(row[2]);
+        const pmIn = parseTimeValue(row[3]);
+        const pmOut = parseTimeValue(row[4]);
+        if (amIn && amOut) hours += (amOut - amIn);
+        if (pmIn && pmOut) hours += (pmOut - pmIn);
+      }
+
+      dailyHours.push(Math.max(0, hours));
+      continue;
+    }
+
+    // TOTALS row = end of week
+    if (inWeek && /^TOTALS?$/i.test(firstCell)) {
+      if (dailyHours.length > 0) {
+        const totalHours = dailyHours.reduce((a, b) => a + b, 0);
+        results.push({ weekStart: currentWeekStart, hours: Math.round(totalHours * 100) / 100 });
+      }
+      inWeek = false;
+      dailyHours = [];
+    }
+  }
+
+  // Catch trailing week
+  if (inWeek && dailyHours.length > 0) {
+    const totalHours = dailyHours.reduce((a, b) => a + b, 0);
+    results.push({ weekStart: currentWeekStart, hours: Math.round(totalHours * 100) / 100 });
+  }
+
+  return results;
+}
+
+// ── File Handling ──
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+uploadArea.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  uploadArea.classList.add('dragover');
+});
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadArea.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+function handleFiles(files) {
+  let imported = 0;
+  let errors = 0;
+
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const parsed = parseTimesheetFile(data, file.name);
+
+        parsed.forEach(w => {
+          const key = w.weekStart ? dateKey(w.weekStart) : `manual-${Date.now()}-${Math.random()}`;
+          // Avoid duplicates
+          const exists = weeks.find(existing => existing.key === key);
+          if (!exists && w.hours > 0) {
+            weeks.push({
+              key: key,
+              weekStart: w.weekStart ? w.weekStart.toISOString() : null,
+              hours: w.hours,
+              source: 'file',
+              filename: file.name,
+              added: new Date().toISOString()
+            });
+            imported++;
+          } else if (exists) {
+            // Update if from same file
+            exists.hours = w.hours;
+            exists.filename = file.name;
+            imported++;
+          }
+        });
+
+        saveAndRender();
+        if (imported > 0) showToast(`Imported ${imported} week(s)`, 'success');
+      } catch (err) {
+        errors++;
+        console.error('Parse error:', err);
+        showToast(`Error parsing ${file.name}: ${err.message}`, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── Manual Entry ──
+function addManualEntry() {
+  const dateVal = document.getElementById('manualDate').value;
+  const hoursVal = parseFloat(document.getElementById('manualHours').value);
+
+  if (!dateVal || isNaN(hoursVal) || hoursVal < 0) {
+    showToast('Enter a valid date and hours', 'error');
+    return;
+  }
+
+  const weekStart = getWeekStartFromDate(new Date(dateVal + 'T12:00:00'));
+  const key = dateKey(weekStart);
+
+  const exists = weeks.find(w => w.key === key);
+  if (exists) {
+    exists.hours = hoursVal;
+    exists.source = 'manual';
+    exists.added = new Date().toISOString();
+  } else {
+    weeks.push({
+      key: key,
+      weekStart: weekStart.toISOString(),
+      hours: hoursVal,
+      source: 'manual',
+      filename: null,
+      added: new Date().toISOString()
+    });
+  }
+
+  document.getElementById('manualDate').value = '';
+  document.getElementById('manualHours').value = '';
+  saveAndRender();
+  showToast('Week added', 'success');
+}
+
+// ── Data Operations ──
+function deleteWeek(key) {
+  weeks = weeks.filter(w => w.key !== key);
+  saveAndRender();
+}
+
+function clearAllData() {
+  if (confirm('Clear all tracked hours? This cannot be undone.')) {
+    weeks = [];
+    saveAndRender();
+    showToast('All data cleared', 'success');
+  }
+}
+
+function updateTarget() {
+  target = parseFloat(document.getElementById('targetInput').value) || 30;
+  localStorage.setItem('rea_hours_target', target);
+  document.getElementById('targetDisplay').textContent = target;
+  render();
+}
+
+function exportCSV() {
+  if (weeks.length === 0) return;
+  const sorted = [...weeks].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+  let csv = 'Week Starting,Hours,Running Avg,Source\n';
+  let cumulative = 0;
+  sorted.forEach((w, i) => {
+    cumulative += w.hours;
+    const avg = (cumulative / (i + 1)).toFixed(1);
+    csv += `${w.weekStart ? formatDate(w.weekStart) : 'Unknown'},${w.hours},${avg},${w.source}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hours_tracker_export.csv';
+  a.click();
+}
+
+function saveAndRender() {
+  localStorage.setItem('rea_hours_weeks', JSON.stringify(weeks));
+  render();
+}
+
+// ── Rendering ──
+function render() {
+  const sorted = [...weeks].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
+
+  // Stats
+  const totalHours = sorted.reduce((sum, w) => sum + w.hours, 0);
+  const weekCount = sorted.length;
+  const avg = weekCount > 0 ? totalHours / weekCount : 0;
+  const delta = totalHours - (weekCount * target);
+
+  document.getElementById('statAvg').textContent = weekCount > 0 ? avg.toFixed(1) : '—';
+  document.getElementById('statTotal').textContent = weekCount > 0 ? totalHours.toFixed(1) : '—';
+  document.getElementById('statWeekCount').textContent = `${weekCount} week${weekCount !== 1 ? 's' : ''} tracked`;
+
+  if (weekCount > 0) {
+    document.getElementById('statDelta').textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1);
+    const needed = Math.max(0, ((weekCount + 1) * target) - totalHours);
+    document.getElementById('statNeeded').textContent = needed.toFixed(1);
+  } else {
+    document.getElementById('statDelta').textContent = '—';
+    document.getElementById('statNeeded').textContent = '—';
+  }
+
+  // Color coding
+  const avgCard = document.getElementById('statAvg').closest('.stat-card');
+  const deltaCard = document.getElementById('statDelta').closest('.stat-card');
+  avgCard.className = 'stat-card ' + (weekCount === 0 ? 'stat-neutral' : avg >= target ? 'stat-on-target' : avg >= target - 2 ? 'stat-close' : 'stat-below');
+  deltaCard.className = 'stat-card ' + (weekCount === 0 ? 'stat-neutral' : delta >= 0 ? 'stat-on-target' : delta >= -10 ? 'stat-close' : 'stat-below');
+
+  // Average bar
+  const maxBar = target * 1.5;
+  const barPct = weekCount > 0 ? Math.min((avg / maxBar) * 100, 100) : 0;
+  const targetPct = (target / maxBar) * 100;
+  const fill = document.getElementById('avgBarFill');
+  fill.style.width = barPct + '%';
+  fill.style.background = avg >= target ? 'var(--green)' : avg >= target - 2 ? 'var(--yellow)' : 'var(--red)';
+  document.getElementById('avgBarTarget').style.left = targetPct + '%';
+  document.getElementById('avgBarTarget').querySelector('.avg-bar-target-label').textContent = target + ' hr';
+
+  // Chart
+  renderChart(sorted);
+
+  // Table
+  renderTable(sorted);
+}
+
+function renderChart(sorted) {
+  const container = document.getElementById('chartContainer');
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>No data yet</p></div>';
+    return;
+  }
+
+  const maxHours = Math.max(target * 1.3, ...sorted.map(w => w.hours));
+  const targetPct = (target / maxHours) * 100;
+
+  let html = '<div class="chart-bars" style="position: relative;">';
+  html += `<div class="chart-target-line" style="bottom: ${targetPct}%;">
+    <span class="chart-target-label">${target}h</span>
+  </div>`;
+
+  sorted.forEach(w => {
+    const pct = (w.hours / maxHours) * 100;
+    const color = w.hours >= target ? 'var(--green)' : w.hours >= target - 2 ? 'var(--yellow)' : 'var(--red)';
+    const label = w.weekStart ? new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
+
+    html += `<div class="chart-bar-group">
+      <div class="chart-bar" style="height: ${pct}%; background: ${color};" title="${w.hours}h — ${label}"></div>
+      <div class="chart-bar-label">${label}</div>
+    </div>`;
+  });
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderTable(sorted) {
+  const container = document.getElementById('tableContainer');
+  if (sorted.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>Upload timesheets or add entries manually.</p></div>';
+    return;
+  }
+
+  let cumulative = 0;
+  let html = '<div class="table-wrap"><table><thead><tr>';
+  html += '<th>Week</th><th>Hours</th><th>Running Avg</th><th>Source</th><th></th>';
+  html += '</tr></thead><tbody>';
+
+  sorted.forEach((w, i) => {
+    cumulative += w.hours;
+    const avg = cumulative / (i + 1);
+    const cls = w.hours >= target ? 'on-target' : w.hours >= target - 2 ? 'close' : 'below';
+    const avgCls = avg >= target ? 'on-target' : avg >= target - 2 ? 'close' : 'below';
+    const weekLabel = w.weekStart ? formatDate(w.weekStart) : 'Unknown';
+
+    html += `<tr>
+      <td>${weekLabel}</td>
+      <td class="hours-cell ${cls}">${w.hours.toFixed(1)}</td>
+      <td class="hours-cell ${avgCls}">${avg.toFixed(1)}</td>
+      <td><span class="source-badge ${w.source}">${w.source}</span></td>
+      <td><button class="btn btn-danger" onclick="deleteWeek('${w.key}')">✕</button></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
+}
+
+// ── Toast ──
+function showToast(msg, type) {
+  const existing = document.querySelector('.toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// ── Init ──
+document.getElementById('targetDisplay').textContent = target;
+render();
+</script>
+
+</body>
+</html>
