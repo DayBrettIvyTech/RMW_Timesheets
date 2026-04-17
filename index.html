@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hours Tracker</title>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -564,6 +564,11 @@ td.close { color: var(--yellow); }
       <div>
         <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
         <button class="btn btn-small btn-primary" onclick="exportCSV()" style="margin-left: 0.5rem;">Export CSV</button>
+        <button class="btn btn-small btn-primary" onclick="exportJSON()" style="margin-left: 0.5rem;">Export JSON</button>
+        <label class="btn btn-small" style="margin-left: 0.5rem; background: var(--surface2); color: var(--text-muted); cursor: pointer;">
+          Import JSON
+          <input type="file" accept=".json" style="display:none;" onchange="importJSON(event)">
+        </label>
       </div>
     </div>
   </div>
@@ -578,11 +583,27 @@ td.close { color: var(--yellow); }
 </div>
 
 <script>
+// ── Storage helpers (localStorage may not work in all environments) ──
+function storageGet(key, fallback) {
+  try { const v = localStorage.getItem(key); return v !== null ? v : fallback; }
+  catch(e) { return fallback; }
+}
+function storageSet(key, val) {
+  try { localStorage.setItem(key, val); } catch(e) {}
+}
+
 // ── State ──
-let weeks = JSON.parse(localStorage.getItem('rea_hours_weeks') || '[]');
-let target = parseFloat(localStorage.getItem('rea_hours_target') || '30');
+let weeks = JSON.parse(storageGet('rea_hours_weeks', '[]'));
+let target = parseFloat(storageGet('rea_hours_target', '30'));
 
 document.getElementById('targetInput').value = target;
+
+// ── Check XLSX loaded ──
+if (typeof XLSX === 'undefined') {
+  document.getElementById('uploadArea').innerHTML =
+    '<p style="color: var(--red);"><strong>SheetJS library failed to load.</strong></p>' +
+    '<p style="font-size: 0.75rem; margin-top: 0.5rem;">File import won\'t work here. Deploy to GitHub Pages where the CDN can load, or use manual entry.</p>';
+}
 
 // ── Timesheet Parsing ──
 function parseTimeValue(val) {
@@ -684,35 +705,35 @@ function parseTimesheetFile(data, filename) {
       dailyHours = [];
       currentWeekStart = null;
 
-      // Next row has the date reference (e.g. "w/o 5/4" or Excel serial number)
-      const nextRow = json[i + 1];
-      if (nextRow) {
-        const dateCell = nextRow[0];
+      const weekNum = parseInt(firstCell.match(/\d+/)[0]);
 
-        // Excel serial date number (e.g., 45788 = May 11, 2025)
-        if (typeof dateCell === 'number' && dateCell > 40000) {
-          const d = excelSerialToDate(dateCell);
-          currentWeekStart = getWeekStartFromDate(d);
-        }
-        // String like "w/o 5/4" or "w/o 12/28"
-        else if (typeof dateCell === 'string') {
-          const woMatch = dateCell.match(/w\/o\s*(\d{1,2})\/(\d{1,2})/i);
-          if (woMatch) {
-            const m = parseInt(woMatch[1]);
-            const d = parseInt(woMatch[2]);
-            // Use sheet year; "w/o" = week of, treat that date as a day in the week
-            const ref = new Date(sheetYear, m - 1, d);
-            currentWeekStart = getWeekStartFromDate(ref);
-          }
-        }
-      }
-
-      // Fallback to filename dates
-      if (!currentWeekStart && filenameDates) {
-        const weekNum = parseInt(firstCell.match(/\d+/)[0]);
+      // Priority 1: filename dates (most reliable — user updates these)
+      if (filenameDates) {
         const start = new Date(filenameDates.start);
         if (weekNum === 2) start.setDate(start.getDate() + 7);
         currentWeekStart = getWeekStartFromDate(start);
+      }
+
+      // Fallback: parse dates from inside the sheet (often stale template values)
+      if (!currentWeekStart) {
+        const nextRow = json[i + 1];
+        if (nextRow) {
+          const dateCell = nextRow[0];
+
+          if (typeof dateCell === 'number' && dateCell > 40000) {
+            const d = excelSerialToDate(dateCell);
+            currentWeekStart = getWeekStartFromDate(d);
+          }
+          else if (typeof dateCell === 'string') {
+            const woMatch = dateCell.match(/w\/o\s*(\d{1,2})\/(\d{1,2})/i);
+            if (woMatch) {
+              const m = parseInt(woMatch[1]);
+              const d = parseInt(woMatch[2]);
+              const ref = new Date(sheetYear, m - 1, d);
+              currentWeekStart = getWeekStartFromDate(ref);
+            }
+          }
+        }
       }
 
       continue;
@@ -786,8 +807,16 @@ uploadArea.addEventListener('drop', (e) => {
 fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
 
 function handleFiles(files) {
-  let imported = 0;
-  let errors = 0;
+  if (typeof XLSX === 'undefined') {
+    showToast('SheetJS not loaded — file import unavailable', 'error');
+    return;
+  }
+
+  let totalImported = 0;
+  let totalSkipped = 0;
+  let totalErrors = 0;
+  let filesProcessed = 0;
+  const fileCount = files.length;
 
   Array.from(files).forEach(file => {
     const reader = new FileReader();
@@ -796,9 +825,13 @@ function handleFiles(files) {
         const data = new Uint8Array(e.target.result);
         const parsed = parseTimesheetFile(data, file.name);
 
+        if (parsed.length === 0) {
+          totalErrors++;
+          showToast(`No week data found in ${file.name}`, 'error');
+        }
+
         parsed.forEach(w => {
           const key = w.weekStart ? dateKey(w.weekStart) : `manual-${Date.now()}-${Math.random()}`;
-          // Avoid duplicates
           const exists = weeks.find(existing => existing.key === key);
           if (!exists && w.hours > 0) {
             weeks.push({
@@ -809,22 +842,40 @@ function handleFiles(files) {
               filename: file.name,
               added: new Date().toISOString()
             });
-            imported++;
+            totalImported++;
           } else if (exists) {
-            // Update if from same file
             exists.hours = w.hours;
             exists.filename = file.name;
-            imported++;
+            totalSkipped++;
+          } else if (w.hours === 0) {
+            totalSkipped++;
           }
         });
 
-        saveAndRender();
-        if (imported > 0) showToast(`Imported ${imported} week(s)`, 'success');
+        filesProcessed++;
+        if (filesProcessed === fileCount) {
+          saveAndRender();
+          if (totalImported > 0) {
+            let msg = `Imported ${totalImported} week(s)`;
+            if (totalSkipped > 0) msg += `, ${totalSkipped} duplicates updated`;
+            showToast(msg, 'success');
+          } else if (totalSkipped > 0) {
+            showToast(`${totalSkipped} week(s) already existed — updated`, 'success');
+          } else {
+            showToast('No new data found in uploaded files', 'error');
+          }
+        }
       } catch (err) {
-        errors++;
-        console.error('Parse error:', err);
+        totalErrors++;
+        filesProcessed++;
+        console.error('Parse error for ' + file.name + ':', err);
         showToast(`Error parsing ${file.name}: ${err.message}`, 'error');
       }
+    };
+    reader.onerror = () => {
+      totalErrors++;
+      filesProcessed++;
+      showToast(`Failed to read ${file.name}`, 'error');
     };
     reader.readAsArrayBuffer(file);
   });
@@ -881,7 +932,7 @@ function clearAllData() {
 
 function updateTarget() {
   target = parseFloat(document.getElementById('targetInput').value) || 30;
-  localStorage.setItem('rea_hours_target', target);
+  storageSet('rea_hours_target', target);
   document.getElementById('targetDisplay').textContent = target;
   render();
 }
@@ -904,7 +955,7 @@ function exportCSV() {
 }
 
 function saveAndRender() {
-  localStorage.setItem('rea_hours_weeks', JSON.stringify(weeks));
+  storageSet('rea_hours_weeks', JSON.stringify(weeks));
   render();
 }
 
@@ -1026,6 +1077,51 @@ function showToast(msg, type) {
   toast.textContent = msg;
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 3000);
+}
+
+// ── JSON Import/Export ──
+function exportJSON() {
+  if (weeks.length === 0) { showToast('No data to export', 'error'); return; }
+  const payload = { version: 1, target: target, weeks: weeks };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hours_tracker_backup.json';
+  a.click();
+  showToast('Backup exported', 'success');
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload.weeks || !Array.isArray(payload.weeks)) {
+        showToast('Invalid backup file', 'error');
+        return;
+      }
+      let added = 0;
+      payload.weeks.forEach(w => {
+        const exists = weeks.find(existing => existing.key === w.key);
+        if (!exists) { weeks.push(w); added++; }
+        else { exists.hours = w.hours; exists.source = w.source; exists.filename = w.filename; }
+      });
+      if (payload.target) {
+        target = payload.target;
+        document.getElementById('targetInput').value = target;
+        document.getElementById('targetDisplay').textContent = target;
+        storageSet('rea_hours_target', target);
+      }
+      saveAndRender();
+      showToast(`Imported ${added} new week(s), ${payload.weeks.length - added} updated`, 'success');
+    } catch (err) {
+      showToast('Failed to parse backup: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
 }
 
 // ── Init ──
