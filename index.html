@@ -767,19 +767,19 @@ function renderChart(sorted) {
 
   // Scale so bars fill the space properly
   const maxHours = Math.max(target + 5, ...sorted.map(w => w.hours)) * 1.05;
-  const targetPct = (target / maxHours) * 100;
+  const targetPx = (target / maxHours) * 240;
 
   let html = '<div class="chart-bars">';
-  html += '<div class="chart-target-line" style="bottom: ' + targetPct + '%;"><span class="chart-target-label">' + target + 'h</span></div>';
+  html += '<div class="chart-target-line" style="bottom: ' + targetPx + 'px;"><span class="chart-target-label">' + target + 'h</span></div>';
 
   sorted.forEach(w => {
-    const pct = Math.max((w.hours / maxHours) * 100, 2);
+    const barPx = Math.max((w.hours / maxHours) * 240, 4);
     const color = w.hours >= target ? 'var(--green)' : w.hours >= target - 2 ? 'var(--yellow)' : 'var(--red)';
     const label = w.weekStart ? new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
 
     html += '<div class="chart-bar-group">';
     html += '<div class="chart-bar-value">' + w.hours.toFixed(1) + '</div>';
-    html += '<div class="chart-bar" style="height: ' + pct + '%; background: ' + color + ';" title="' + w.hours + 'h — ' + label + '"></div>';
+    html += '<div class="chart-bar" style="height: ' + barPx + 'px; background: ' + color + ';" title="' + w.hours + 'h — ' + label + '"></div>';
     html += '<div class="chart-bar-label">' + label + '</div>';
     html += '</div>';
   });
