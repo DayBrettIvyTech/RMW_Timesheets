@@ -169,33 +169,6 @@ header p {
   border-bottom: 1px solid var(--border);
 }
 
-/* Upload area */
-.upload-area {
-  border: 2px dashed var(--border);
-  border-radius: 8px;
-  padding: 2rem;
-  text-align: center;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-  background: var(--surface);
-}
-
-.upload-area:hover, .upload-area.dragover {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-}
-
-.upload-area p {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.upload-area p strong {
-  color: var(--accent);
-}
-
-.upload-area input { display: none; }
-
 /* Manual entry */
 .manual-form {
   display: grid;
@@ -313,11 +286,6 @@ td.on-target { color: var(--green); }
 td.below { color: var(--red); }
 td.close { color: var(--yellow); }
 
-.running-avg-cell {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-}
-
 .source-badge {
   display: inline-block;
   font-size: 0.65rem;
@@ -364,7 +332,7 @@ td.close { color: var(--yellow); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 1.25rem;
+  padding: 1.25rem 1.25rem 3rem;
   margin-bottom: 2rem;
   overflow-x: auto;
 }
@@ -372,8 +340,8 @@ td.close { color: var(--yellow); }
 .chart-bars {
   display: flex;
   align-items: flex-end;
-  gap: 3px;
-  height: 200px;
+  gap: 4px;
+  height: 240px;
   padding-top: 1.5rem;
   position: relative;
   min-width: fit-content;
@@ -384,7 +352,7 @@ td.close { color: var(--yellow); }
   flex-direction: column;
   align-items: center;
   flex: 1;
-  min-width: 28px;
+  min-width: 32px;
   max-width: 56px;
 }
 
@@ -392,27 +360,34 @@ td.close { color: var(--yellow); }
   width: 100%;
   border-radius: 4px 4px 0 0;
   transition: height 0.4s ease;
-  min-height: 6px;
+  min-height: 4px;
   position: relative;
+}
+
+.chart-bar-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+  white-space: nowrap;
 }
 
 .chart-bar-label {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   color: var(--text-muted);
-  margin-top: 0.35rem;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  max-height: 50px;
-  overflow: hidden;
+  margin-top: 6px;
+  transform: rotate(-45deg);
+  transform-origin: top left;
+  white-space: nowrap;
+  height: 45px;
 }
 
 .chart-target-line {
   position: absolute;
   left: 0;
   right: 0;
-  height: 1px;
-  border-top: 1.5px dashed var(--text-muted);
+  border-top: 2px dashed var(--text-muted);
   z-index: 1;
   pointer-events: none;
 }
@@ -422,7 +397,7 @@ td.close { color: var(--yellow); }
   right: 0;
   transform: translateY(-100%);
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   color: var(--text-muted);
   padding: 0 4px;
   background: var(--surface);
@@ -573,7 +548,7 @@ td.close { color: var(--yellow); }
 </div>
 
 <script>
-// ── Storage helpers (localStorage may not work in all environments) ──
+// ── Storage helpers ──
 function storageGet(key, fallback) {
   try { const v = localStorage.getItem(key); return v !== null ? v : fallback; }
   catch(e) { return fallback; }
@@ -588,48 +563,23 @@ let target = parseFloat(storageGet('rea_hours_target', '30'));
 
 document.getElementById('targetInput').value = target;
 
-// ── Check XLSX loaded ──
-if (typeof XLSX === 'undefined') {
-  document.getElementById('uploadArea').innerHTML =
-    '<p style="color: var(--red);"><strong>SheetJS library failed to load.</strong></p>' +
-    '<p style="font-size: 0.75rem; margin-top: 0.5rem;">File import won\'t work here. Deploy to GitHub Pages where the CDN can load, or use manual entry.</p>';
-}
-
-// ── Timesheet Parsing ──
+// ── Helpers ──
 function parseTimeValue(val) {
   if (val === null || val === undefined || val === '') return 0;
-
-  // SheetJS raw mode: Excel time as fraction of day (0.333... = 8 hours)
-  if (typeof val === 'number') {
-    return val * 24;
-  }
-
-  // Fallback: string like "08:00:00"
+  if (typeof val === 'number') return val * 24;
   if (typeof val === 'string') {
     const match = val.match(/^(\d+):(\d+)(?::(\d+))?$/);
-    if (match) {
-      return parseInt(match[1]) + parseInt(match[2]) / 60;
-    }
+    if (match) return parseInt(match[1]) + parseInt(match[2]) / 60;
   }
-
   return 0;
-}
-
-function excelSerialToDate(serial) {
-  // Excel serial date: days since Jan 1, 1900 (with leap year bug)
-  // 45788 = May 11, 2025
-  const epoch = new Date(1899, 11, 30); // Dec 30, 1899
-  return new Date(epoch.getTime() + serial * 86400000);
 }
 
 function parseDateFromFilename(filename) {
   const match = filename.match(/(\d{1,2})-(\d{1,2})-(\d{2,4})_to_(\d{1,2})-(\d{1,2})-(\d{2,4})/);
   if (!match) return null;
-
   let [, m1, d1, y1, m2, d2, y2] = match;
   y1 = y1.length === 2 ? (parseInt(y1) > 50 ? '19' + y1 : '20' + y1) : y1;
   y2 = y2.length === 2 ? (parseInt(y2) > 50 ? '19' + y2 : '20' + y2) : y2;
-
   return {
     start: new Date(parseInt(y1), parseInt(m1) - 1, parseInt(d1)),
     end: new Date(parseInt(y2), parseInt(m2) - 1, parseInt(d2))
@@ -638,187 +588,17 @@ function parseDateFromFilename(filename) {
 
 function getWeekStartFromDate(date) {
   const d = new Date(date);
-  const day = d.getDay();
-  d.setDate(d.getDate() - day);
+  d.setDate(d.getDate() - d.getDay());
   return d;
 }
 
 function formatDate(d) {
-  const date = new Date(d);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function dateKey(d) {
   const date = new Date(d);
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
-}
-
-function parseTimesheetFile(data, filename) {
-  // Dates come from the filename ONLY — the w/o field inside the sheet is not maintained
-  const filenameDates = parseDateFromFilename(filename);
-  if (!filenameDates) {
-    throw new Error('Cannot parse date range from filename: ' + filename);
-  }
-
-  const workbook = XLSX.read(data, { type: 'array', cellDates: false, raw: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-  const json = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
-
-  const results = [];
-  let dailyHours = [];
-  let inWeek = false;
-  let currentWeekNum = 0;
-
-  for (let i = 0; i < json.length; i++) {
-    const row = json[i];
-    if (!row || row.length === 0) continue;
-
-    const firstCell = String(row[0] || '').trim();
-
-    // "Week 1" or "Week 2"
-    if (/^Week\s*\d/i.test(firstCell)) {
-      if (inWeek && dailyHours.length > 0) {
-        const total = dailyHours.reduce((a, b) => a + b, 0);
-        const ws = new Date(filenameDates.start.getTime());
-        if (currentWeekNum === 2) ws.setDate(ws.getDate() + 7);
-        results.push({ weekStart: getWeekStartFromDate(ws), hours: Math.round(total * 100) / 100 });
-      }
-      currentWeekNum = parseInt(firstCell.match(/\d+/)[0]);
-      inWeek = true;
-      dailyHours = [];
-      continue;
-    }
-
-    // Day rows (Sun–Sat)
-    const dayNames = ['sun', 'mon', 'tues', 'tue', 'wed', 'thurs', 'thu', 'fri', 'sat'];
-    if (inWeek && dayNames.includes(firstCell.toLowerCase())) {
-      let hours = 0;
-      const dailyTotal = row[7];
-      if (dailyTotal !== null && dailyTotal !== undefined) hours = parseTimeValue(dailyTotal);
-      if (hours === 0 && row[5] && row[6]) hours = parseTimeValue(row[5]) + parseTimeValue(row[6]);
-      if (hours === 0) {
-        const amIn = parseTimeValue(row[1]), amOut = parseTimeValue(row[2]);
-        const pmIn = parseTimeValue(row[3]), pmOut = parseTimeValue(row[4]);
-        if (amIn && amOut) hours += (amOut - amIn);
-        if (pmIn && pmOut) hours += (pmOut - pmIn);
-      }
-      dailyHours.push(Math.max(0, hours));
-      continue;
-    }
-
-    // TOTALS = end of week
-    if (inWeek && /^TOTALS?$/i.test(firstCell)) {
-      if (dailyHours.length > 0) {
-        const total = dailyHours.reduce((a, b) => a + b, 0);
-        const ws = new Date(filenameDates.start.getTime());
-        if (currentWeekNum === 2) ws.setDate(ws.getDate() + 7);
-        results.push({ weekStart: getWeekStartFromDate(ws), hours: Math.round(total * 100) / 100 });
-      }
-      inWeek = false;
-      dailyHours = [];
-    }
-  }
-
-  if (inWeek && dailyHours.length > 0) {
-    const total = dailyHours.reduce((a, b) => a + b, 0);
-    const ws = new Date(filenameDates.start.getTime());
-    if (currentWeekNum === 2) ws.setDate(ws.getDate() + 7);
-    results.push({ weekStart: getWeekStartFromDate(ws), hours: Math.round(total * 100) / 100 });
-  }
-
-  return results;
-}
-
-// ── File Handling ──
-const uploadArea = document.getElementById('uploadArea');
-const fileInput = document.getElementById('fileInput');
-
-uploadArea.addEventListener('click', () => fileInput.click());
-uploadArea.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadArea.classList.add('dragover');
-});
-uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
-uploadArea.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadArea.classList.remove('dragover');
-  handleFiles(e.dataTransfer.files);
-});
-fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-function handleFiles(files) {
-  if (typeof XLSX === 'undefined') {
-    showToast('SheetJS not loaded — file import unavailable', 'error');
-    return;
-  }
-
-  let totalImported = 0;
-  let totalSkipped = 0;
-  let totalErrors = 0;
-  let filesProcessed = 0;
-  const fileCount = files.length;
-
-  Array.from(files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const parsed = parseTimesheetFile(data, file.name);
-
-        if (parsed.length === 0) {
-          totalErrors++;
-          showToast(`No week data found in ${file.name}`, 'error');
-        }
-
-        parsed.forEach(w => {
-          const key = w.weekStart ? dateKey(w.weekStart) : `manual-${Date.now()}-${Math.random()}`;
-          const exists = weeks.find(existing => existing.key === key);
-          if (!exists && w.hours > 0) {
-            weeks.push({
-              key: key,
-              weekStart: w.weekStart ? w.weekStart.toISOString() : null,
-              hours: w.hours,
-              source: 'file',
-              filename: file.name,
-              added: new Date().toISOString()
-            });
-            totalImported++;
-          } else if (exists) {
-            exists.hours = w.hours;
-            exists.filename = file.name;
-            totalSkipped++;
-          } else if (w.hours === 0) {
-            totalSkipped++;
-          }
-        });
-
-        filesProcessed++;
-        if (filesProcessed === fileCount) {
-          saveAndRender();
-          if (totalImported > 0) {
-            let msg = `Imported ${totalImported} week(s)`;
-            if (totalSkipped > 0) msg += `, ${totalSkipped} duplicates updated`;
-            showToast(msg, 'success');
-          } else if (totalSkipped > 0) {
-            showToast(`${totalSkipped} week(s) already existed — updated`, 'success');
-          } else {
-            showToast('No new data found in uploaded files', 'error');
-          }
-        }
-      } catch (err) {
-        totalErrors++;
-        filesProcessed++;
-        console.error('Parse error for ' + file.name + ':', err);
-        showToast(`Error parsing ${file.name}: ${err.message}`, 'error');
-      }
-    };
-    reader.onerror = () => {
-      totalErrors++;
-      filesProcessed++;
-      showToast(`Failed to read ${file.name}`, 'error');
-    };
-    reader.readAsArrayBuffer(file);
-  });
+  return date.getFullYear() + '-' + String(date.getMonth()+1).padStart(2,'0') + '-' + String(date.getDate()).padStart(2,'0');
 }
 
 // ── Manual Entry ──
@@ -838,15 +618,13 @@ function addManualEntry() {
   if (exists) {
     exists.hours = hoursVal;
     exists.source = 'manual';
-    exists.added = new Date().toISOString();
   } else {
     weeks.push({
       key: key,
       weekStart: weekStart.toISOString(),
       hours: hoursVal,
       source: 'manual',
-      filename: null,
-      added: new Date().toISOString()
+      filename: null
     });
   }
 
@@ -884,12 +662,10 @@ function exportCSV() {
   let cumulative = 0;
   sorted.forEach((w, i) => {
     cumulative += w.hours;
-    const avg = (cumulative / (i + 1)).toFixed(1);
-    csv += `${w.weekStart ? formatDate(w.weekStart) : 'Unknown'},${w.hours},${avg},${w.source}\n`;
+    csv += formatDate(w.weekStart) + ',' + w.hours + ',' + (cumulative / (i + 1)).toFixed(1) + ',' + w.source + '\n';
   });
-  const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
   a.download = 'hours_tracker_export.csv';
   a.click();
 }
@@ -899,11 +675,54 @@ function saveAndRender() {
   render();
 }
 
+// ── JSON Import/Export ──
+function exportJSON() {
+  if (weeks.length === 0) { showToast('No data to export', 'error'); return; }
+  const payload = { version: 1, target: target, weeks: weeks };
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+  a.download = 'hours_tracker_backup.json';
+  a.click();
+  showToast('Backup exported', 'success');
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const payload = JSON.parse(e.target.result);
+      if (!payload.weeks || !Array.isArray(payload.weeks)) {
+        showToast('Invalid backup file', 'error');
+        return;
+      }
+      let added = 0;
+      payload.weeks.forEach(function(w) {
+        const exists = weeks.find(function(existing) { return existing.key === w.key; });
+        if (!exists) { weeks.push(w); added++; }
+        else { exists.hours = w.hours; exists.source = w.source; exists.filename = w.filename; }
+      });
+      if (payload.target) {
+        target = payload.target;
+        document.getElementById('targetInput').value = target;
+        document.getElementById('targetDisplay').textContent = target;
+        storageSet('rea_hours_target', target);
+      }
+      saveAndRender();
+      showToast('Imported ' + added + ' new week(s), ' + (payload.weeks.length - added) + ' updated', 'success');
+    } catch (err) {
+      showToast('Failed to parse backup: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
 // ── Rendering ──
 function render() {
   const sorted = [...weeks].sort((a, b) => new Date(a.weekStart) - new Date(b.weekStart));
 
-  // Stats
   const totalHours = sorted.reduce((sum, w) => sum + w.hours, 0);
   const weekCount = sorted.length;
   const avg = weekCount > 0 ? totalHours / weekCount : 0;
@@ -911,24 +730,21 @@ function render() {
 
   document.getElementById('statAvg').textContent = weekCount > 0 ? avg.toFixed(1) : '—';
   document.getElementById('statTotal').textContent = weekCount > 0 ? totalHours.toFixed(1) : '—';
-  document.getElementById('statWeekCount').textContent = `${weekCount} week${weekCount !== 1 ? 's' : ''} tracked`;
+  document.getElementById('statWeekCount').textContent = weekCount + ' week' + (weekCount !== 1 ? 's' : '') + ' tracked';
 
   if (weekCount > 0) {
     document.getElementById('statDelta').textContent = (delta >= 0 ? '+' : '') + delta.toFixed(1);
-    const needed = Math.max(0, ((weekCount + 1) * target) - totalHours);
-    document.getElementById('statNeeded').textContent = needed.toFixed(1);
+    document.getElementById('statNeeded').textContent = Math.max(0, ((weekCount + 1) * target) - totalHours).toFixed(1);
   } else {
     document.getElementById('statDelta').textContent = '—';
     document.getElementById('statNeeded').textContent = '—';
   }
 
-  // Color coding
   const avgCard = document.getElementById('statAvg').closest('.stat-card');
   const deltaCard = document.getElementById('statDelta').closest('.stat-card');
   avgCard.className = 'stat-card ' + (weekCount === 0 ? 'stat-neutral' : avg >= target ? 'stat-on-target' : avg >= target - 2 ? 'stat-close' : 'stat-below');
   deltaCard.className = 'stat-card ' + (weekCount === 0 ? 'stat-neutral' : delta >= 0 ? 'stat-on-target' : delta >= -10 ? 'stat-close' : 'stat-below');
 
-  // Average bar
   const maxBar = target * 1.5;
   const barPct = weekCount > 0 ? Math.min((avg / maxBar) * 100, 100) : 0;
   const targetPct = (target / maxBar) * 100;
@@ -938,10 +754,7 @@ function render() {
   document.getElementById('avgBarTarget').style.left = targetPct + '%';
   document.getElementById('avgBarTarget').querySelector('.avg-bar-target-label').textContent = target + ' hr';
 
-  // Chart
   renderChart(sorted);
-
-  // Table
   renderTable(sorted);
 }
 
@@ -952,23 +765,23 @@ function renderChart(sorted) {
     return;
   }
 
-  const maxHours = Math.max(target * 1.3, ...sorted.map(w => w.hours));
+  // Scale so bars fill the space properly
+  const maxHours = Math.max(target + 5, ...sorted.map(w => w.hours)) * 1.05;
   const targetPct = (target / maxHours) * 100;
 
-  let html = '<div class="chart-bars" style="position: relative;">';
-  html += `<div class="chart-target-line" style="bottom: ${targetPct}%;">
-    <span class="chart-target-label">${target}h</span>
-  </div>`;
+  let html = '<div class="chart-bars">';
+  html += '<div class="chart-target-line" style="bottom: ' + targetPct + '%;"><span class="chart-target-label">' + target + 'h</span></div>';
 
   sorted.forEach(w => {
-    const pct = (w.hours / maxHours) * 100;
+    const pct = Math.max((w.hours / maxHours) * 100, 2);
     const color = w.hours >= target ? 'var(--green)' : w.hours >= target - 2 ? 'var(--yellow)' : 'var(--red)';
     const label = w.weekStart ? new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
 
-    html += `<div class="chart-bar-group">
-      <div class="chart-bar" style="height: ${pct}%; background: ${color};" title="${w.hours}h — ${label}"></div>
-      <div class="chart-bar-label">${label}</div>
-    </div>`;
+    html += '<div class="chart-bar-group">';
+    html += '<div class="chart-bar-value">' + w.hours.toFixed(1) + '</div>';
+    html += '<div class="chart-bar" style="height: ' + pct + '%; background: ' + color + ';" title="' + w.hours + 'h — ' + label + '"></div>';
+    html += '<div class="chart-bar-label">' + label + '</div>';
+    html += '</div>';
   });
 
   html += '</div>';
@@ -978,7 +791,7 @@ function renderChart(sorted) {
 function renderTable(sorted) {
   const container = document.getElementById('tableContainer');
   if (sorted.length === 0) {
-    container.innerHTML = '<div class="empty-state"><p>Upload timesheets or add entries manually.</p></div>';
+    container.innerHTML = '<div class="empty-state"><p>Add entries manually or import a JSON backup.</p></div>';
     return;
   }
 
@@ -994,13 +807,13 @@ function renderTable(sorted) {
     const avgCls = avg >= target ? 'on-target' : avg >= target - 2 ? 'close' : 'below';
     const weekLabel = w.weekStart ? formatDate(w.weekStart) : 'Unknown';
 
-    html += `<tr>
-      <td>${weekLabel}</td>
-      <td class="hours-cell ${cls}">${w.hours.toFixed(1)}</td>
-      <td class="hours-cell ${avgCls}">${avg.toFixed(1)}</td>
-      <td><span class="source-badge ${w.source}">${w.source}</span></td>
-      <td><button class="btn btn-danger" onclick="deleteWeek('${w.key}')">✕</button></td>
-    </tr>`;
+    html += '<tr>';
+    html += '<td>' + weekLabel + '</td>';
+    html += '<td class="hours-cell ' + cls + '">' + w.hours.toFixed(1) + '</td>';
+    html += '<td class="hours-cell ' + avgCls + '">' + avg.toFixed(1) + '</td>';
+    html += '<td><span class="source-badge ' + w.source + '">' + w.source + '</span></td>';
+    html += "<td><button class='btn btn-danger' onclick=\"deleteWeek('" + w.key + "')\">✕</button></td>";
+    html += '</tr>';
   });
 
   html += '</tbody></table></div>';
@@ -1011,57 +824,11 @@ function renderTable(sorted) {
 function showToast(msg, type) {
   const existing = document.querySelector('.toast');
   if (existing) existing.remove();
-
   const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
+  toast.className = 'toast ' + type;
   toast.textContent = msg;
   document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
-}
-
-// ── JSON Import/Export ──
-function exportJSON() {
-  if (weeks.length === 0) { showToast('No data to export', 'error'); return; }
-  const payload = { version: 1, target: target, weeks: weeks };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'hours_tracker_backup.json';
-  a.click();
-  showToast('Backup exported', 'success');
-}
-
-function importJSON(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    try {
-      const payload = JSON.parse(e.target.result);
-      if (!payload.weeks || !Array.isArray(payload.weeks)) {
-        showToast('Invalid backup file', 'error');
-        return;
-      }
-      let added = 0;
-      payload.weeks.forEach(w => {
-        const exists = weeks.find(existing => existing.key === w.key);
-        if (!exists) { weeks.push(w); added++; }
-        else { exists.hours = w.hours; exists.source = w.source; exists.filename = w.filename; }
-      });
-      if (payload.target) {
-        target = payload.target;
-        document.getElementById('targetInput').value = target;
-        document.getElementById('targetDisplay').textContent = target;
-        storageSet('rea_hours_target', target);
-      }
-      saveAndRender();
-      showToast(`Imported ${added} new week(s), ${payload.weeks.length - added} updated`, 'success');
-    } catch (err) {
-      showToast('Failed to parse backup: ' + err.message, 'error');
-    }
-  };
-  reader.readAsText(file);
-  event.target.value = '';
+  setTimeout(function() { toast.remove(); }, 3000);
 }
 
 // ── Init ──
