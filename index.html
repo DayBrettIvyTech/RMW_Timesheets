@@ -332,17 +332,16 @@ td.close { color: var(--yellow); }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 1.25rem 1.25rem 3rem;
+  padding: 1.25rem;
   margin-bottom: 2rem;
-  overflow-x: visible;
 }
 
 .chart-bars {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  height: 180;
-  padding-top: 0;
+  height: 260px;
+  padding-top: 20px;
   position: relative;
   min-width: fit-content;
 }
@@ -354,6 +353,7 @@ td.close { color: var(--yellow); }
   flex: 1;
   min-width: 32px;
   max-width: 56px;
+  position: relative;
 }
 
 .chart-bar {
@@ -361,10 +361,11 @@ td.close { color: var(--yellow); }
   border-radius: 4px 4px 0 0;
   transition: height 0.4s ease;
   min-height: 4px;
-  position: relative;
 }
 
 .chart-bar-value {
+  position: absolute;
+  bottom: 100%;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6rem;
   color: var(--text-muted);
@@ -372,15 +373,25 @@ td.close { color: var(--yellow); }
   white-space: nowrap;
 }
 
-.chart-bar-label {
+.chart-labels {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  min-width: fit-content;
+  padding-bottom: 30px;
+}
+
+.chart-label {
+  flex: 1;
+  min-width: 32px;
+  max-width: 56px;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6rem;
   color: var(--text-muted);
-  margin-top: 6px;
   transform: rotate(-45deg);
   transform-origin: top left;
   white-space: nowrap;
-  height: 45px;
+  padding-left: 20px;
 }
 
 .chart-target-line {
@@ -765,27 +776,31 @@ function renderChart(sorted) {
     return;
   }
 
-  // Scale so bars fill the space properly
-  const maxHours = Math.max(target + 5, ...sorted.map(w => w.hours)) * 1.05;
-  const targetPx = (target / maxHours) * 240;
+  const maxHours = Math.max(target + 5, ...sorted.map(w => w.hours)) * 1.15;
+  const chartHeight = 220;
+  const targetPx = (target / maxHours) * chartHeight;
 
-  let html = '<div class="chart-bars">';
-  html += '<div class="chart-target-line" style="bottom: ' + targetPx + 'px;"><span class="chart-target-label">' + target + 'h</span></div>';
+  let barsHtml = '<div class="chart-bars">';
+  barsHtml += '<div class="chart-target-line" style="bottom: ' + targetPx + 'px;"><span class="chart-target-label">' + target + 'h</span></div>';
+
+  let labelsHtml = '<div class="chart-labels">';
 
   sorted.forEach(w => {
-    const barPx = Math.max((w.hours / maxHours) * 240, 4);
+    const barPx = Math.max((w.hours / maxHours) * chartHeight, 4);
     const color = w.hours >= target ? 'var(--green)' : w.hours >= target - 2 ? 'var(--yellow)' : 'var(--red)';
     const label = w.weekStart ? new Date(w.weekStart).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?';
 
-    html += '<div class="chart-bar-group">';
-    html += '<div class="chart-bar-value">' + w.hours.toFixed(1) + '</div>';
-    html += '<div class="chart-bar" style="height: ' + barPx + 'px; background: ' + color + ';" title="' + w.hours + 'h — ' + label + '"></div>';
-    html += '<div class="chart-bar-label">' + label + '</div>';
-    html += '</div>';
+    barsHtml += '<div class="chart-bar-group">';
+    barsHtml += '<div class="chart-bar-value">' + w.hours.toFixed(1) + '</div>';
+    barsHtml += '<div class="chart-bar" style="height: ' + barPx + 'px; background: ' + color + ';" title="' + w.hours + 'h — ' + label + '"></div>';
+    barsHtml += '</div>';
+
+    labelsHtml += '<div class="chart-label">' + label + '</div>';
   });
 
-  html += '</div>';
-  container.innerHTML = html;
+  barsHtml += '</div>';
+  labelsHtml += '</div>';
+  container.innerHTML = barsHtml + labelsHtml;
 }
 
 function renderTable(sorted) {
